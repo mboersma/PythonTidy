@@ -2,10 +2,10 @@
 test: sandbox/bin/pythontidy
 	sandbox/bin/pythontidy setup.py
 
-sandbox/bin/pythontidy: dist/PythonTidy-1.21.zip sandbox/bin/easy_install
-	sandbox/bin/easy_install dist/PythonTidy-1.21.zip
+sandbox/bin/pythontidy: dist/PythonTidy-1.23.zip sandbox/bin/easy_install
+	sandbox/bin/easy_install dist/PythonTidy-1.23.zip
 
-dist/PythonTidy-1.21.zip:
+dist/PythonTidy-1.23.zip:
 	python setup.py egg_info -RDb '' sdist --formats=zip
 
 sandbox/bin/easy_install:
