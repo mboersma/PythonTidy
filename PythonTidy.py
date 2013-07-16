@@ -120,8 +120,15 @@ from __future__ import division
 DEBUG = False
 PERSONAL = False
 
-VERSION = '1.21'  # 2010 Sep 03
+VERSION = '1.23'  # 2012 May 23
 
+# 2012 May 23 . v1.23 . ccr . Fix reference to undefined variable and
+#             .       .     . elide trailing spaces for Sergey Satskiy.
+#             .       .     . Don't use COL_LIMIT global for initial
+#             .       .     . values.  That makes the code look as though
+#             .       .     . it can't be changed later.
+# 2012 Mar 04 . v1.22 . ccr . For Sakae Kobayashi: Fixed wrong default
+#                     .     . for OVERRIDE_NEWLINE.
 # 2010 Sep 08 . v1.21 . ccr . For Nikolai Prokoschenko:
 #
 # o When double spacing is prescribed by PEP 8, do it before
@@ -319,22 +326,18 @@ BOILERPLATE = NULL  # 2007 Mar 06
 BLANK_LINE = NULL
 KEEP_BLANK_LINES = True
 ADD_BLANK_LINES_AROUND_COMMENTS = True
-ADD_BLANK_LINE_AFTER_DOC_STRING = True
 MAX_SEPS_FUNC_DEF = 3  # 2007 May 24
 MAX_SEPS_FUNC_REF = 5  # 2007 May 24
 MAX_SEPS_SERIES = 5  # 2007 May 24
 MAX_SEPS_DICT = 3  # 2007 May 24
 MAX_LINES_BEFORE_SPLIT_LIT = 2
 LEFT_MARGIN = NULL
-NORMALIZE_DOC_STRINGS = False
 LEFTJUST_DOC_STRINGS = False
 WRAP_DOC_STRINGS = False  # 2007 May 25
-LEFTJUST_COMMENTS = False
-WRAP_COMMENTS = False
 DOUBLE_QUOTED_STRINGS = False  # 2006 Dec 05
 SINGLE_QUOTED_STRINGS = False  # 2007 May 01
 RECODE_STRINGS = False  # 2006 Dec 01
-OVERRIDE_NEWLINE = ''  # 2006 Dec 05
+OVERRIDE_NEWLINE = None  # 2012 Mar 04
 CAN_SPLIT_STRINGS = False  # 2007 Mar 06
 DOC_TAB_REPLACEMENT = '....'  # 2007 May 24
 KEEP_UNASSIGNED_CONSTANTS = False  # 2010 Mar 10
@@ -342,6 +345,7 @@ PARENTHESIZE_TUPLE_DISPLAY = True  # 2010 Mar 10
 JAVA_STYLE_LIST_DEDENT = False  # 2010 Sep 08
 
 # Repertoire of name-transformation functions:
+
 
 def all_lower_case(str, **attribs):
     return str.lower()
@@ -472,7 +476,7 @@ ELIDE_C_PATTERN = re.compile('^c([A-Z])')
 ELIDE_A_PATTERN = re.compile('^a([A-Z])')
 ELIDE_F_PATTERN = re.compile('^f([A-Z])')
 DOC_WRAPPER = textwrap.TextWrapper(
-    width=COL_LIMIT,
+#    width=COL_LIMIT,  #  2012 May 23
     expand_tabs=True,
     replace_whitespace=True,
     initial_indent=NULL,
@@ -723,11 +727,11 @@ def force_quote(encoded, double=True, quoted=True):  # 2007 May 01
         size = 1
     double_backslash_delimited_substrings = encoded.split(r'\\')
     for (ndx, substring) in enumerate(double_backslash_delimited_substrings):
-        substring = substring.replace(r'\"','"').replace(r"\'","'")
+        substring = substring.replace(r'\"', '"').replace(r"\'", "'")
         if double:
-            substring = substring.replace('"',r'\"')
+            substring = substring.replace('"', r'\"')
         else:
-            substring = substring.replace("'",r"\'")
+            substring = substring.replace("'", r"\'")
         double_backslash_delimited_substrings[ndx] = substring
     encoded = r'\\'.join(double_backslash_delimited_substrings)
     if double:
@@ -738,8 +742,12 @@ def force_quote(encoded, double=True, quoted=True):  # 2007 May 01
     return result
 
 
-def wrap_lines(lines, width=COL_LIMIT,
-               initial_indent=NULL, subsequent_indent=NULL): # 2007 May 25
+def wrap_lines(
+    lines,
+    width,  # 2012 May 23
+    initial_indent=NULL,
+    subsequent_indent=NULL,
+    ): # 2007 May 25
 
     """Wrap lines of text, preserving blank lines.
 
@@ -813,24 +821,16 @@ class InputUnit(object):
             unit = open(os.path.expanduser(file_in), 'rb')
             buffer = unit.read()  # 2006 Dec 05
             unit.close()
-
         self.lines = UNIVERSAL_NEW_LINE_PATTERN.split(buffer)  # 2006 Dec 05
-
-        # self.lines will be a list of lines and terminators because
-        # UNIVERSAL_NEW_LINE_PATTERN captures the actual newline.
-
-        # If we have more than one line we'll follow the original newline
-        # usage unless OVERRIDE_NEWLINE is set:
         if len(self.lines) > 2:
-            if not OVERRIDE_NEWLINE:
+            if OVERRIDE_NEWLINE is None:
                 self.newline = self.lines[1]  # ... the first delimiter.
             else:
                 self.newline = OVERRIDE_NEWLINE
-            look_ahead = '\n'.join([self.lines[ZERO],self.lines[2]])
+            look_ahead = '\n'.join([self.lines[ZERO], self.lines[2]])
         else:
             self.newline = '\n'
             look_ahead = NULL
-
         match = CODING_PATTERN.search(look_ahead)
         if match is None:
             self.coding = 'ascii'
@@ -906,7 +906,7 @@ class OutputUnit(object):
         return
 
     def close(self):  # 2006 Dec 01
-        self.unit.write(self.buffer.rstrip(self.newline))  # 2007 Jan 22
+        self.unit.write(self.buffer)  # 2007 Jan 22
         if self.is_file_like:
             pass
         else:
@@ -1056,10 +1056,9 @@ class OutputUnit(object):
         self.lineno += text.count(self.newline)
         self.buffer += text  # 2007 Jan 22
         if self.buffer.endswith('\n') or self.buffer.endswith('\r'):  # 2008 Jan 30
-            if self.buffer.rstrip(self.newline):
-                self.unit.write(self.buffer.rstrip())
-                self.unit.write(self.newline)  # 2008 Jan 30
-                self.buffer = NULL
+            self.unit.write(self.buffer.rstrip())
+            self.unit.write(self.newline)  # 2008 Jan 30
+            self.buffer = NULL
         return self
 
     def put_blank_line(self, trace, count=1):
@@ -1152,46 +1151,49 @@ class Comments(dict):
             output; otherwise, the normalized version is used instead.
 
             """
-            while True:
-                prev_item = lines.next()
-                yield prev_item
-                (
-                    prev_token_type,
-                    prev_token_string,
-                    prev_start,
-                    prev_end,
-                    prev_line,
-                    ) = prev_item
-                if prev_token_type in [tokenize.STRING]:
-                    on1 = True
-                    while True:
-                        next_item  = lines.next()
-                        yield next_item
-                        (
-                            next_token_type,
-                            next_token_string,
-                            next_start,
-                            next_end,
-                            next_line,
-                            ) = next_item
-                        if next_token_type in [tokenize.STRING]:
-                            if prev_token_string[-1] == next_token_string[ZERO]:
-                                prev_token_string = prev_token_string[:-1] + \
-                                                    next_token_string[1:]
-                                on1 = False
-                        else:
-                            if on1:
-                                pass
+            try:
+                while True:
+                    prev_item = lines.next()
+                    yield prev_item
+                    (
+                        prev_token_type,
+                        prev_token_string,
+                        prev_start,
+                        prev_end,
+                        prev_line,
+                        ) = prev_item
+                    if prev_token_type in [tokenize.STRING]:
+                        on1 = True
+                        while True:
+                            next_item  = lines.next()
+                            yield next_item
+                            (
+                                next_token_type,
+                                next_token_string,
+                                next_start,
+                                next_end,
+                                next_line,
+                                ) = next_item
+                            if next_token_type in [tokenize.STRING]:
+                                if prev_token_string[-1] == next_token_string[ZERO]:
+                                    prev_token_string = prev_token_string[:-1] + \
+                                                        next_token_string[1:]
+                                    on1 = False
                             else:
-                                prev_item = (
-                                    prev_token_type,
-                                    prev_token_string,
-                                    prev_start,
-                                    prev_end,
-                                    prev_line,
-                                    )
-                                yield prev_item
-                                break
+                                if on1:
+                                    pass
+                                else:
+                                    prev_item = (
+                                        prev_token_type,
+                                        prev_token_string,
+                                        prev_start,
+                                        prev_end,
+                                        prev_line,
+                                        )
+                                    yield prev_item
+                                    break
+            except NotImplementedError:
+                pass
             return
 
         self.literal_pool = {}  # 2007 Jan 14
@@ -1280,7 +1282,7 @@ class Comments(dict):
         if fin:
             lineno = self.max_lineno + 1
         on1 = True
-        text=[]  # 2007 May 25
+        text = []  # 2007 May 25
         while self.prev_lineno < lineno:
             if self.prev_lineno in self:
                 (scol, token_string) = self[self.prev_lineno]
@@ -1300,7 +1302,7 @@ class Comments(dict):
                         text.append([scol, token_string])  # 2007 May 25
                 on1 = False
             self.prev_lineno += 1
-        if text and LEFTJUST_COMMENTS:  # 2007 May 25
+        if text and LEFTJUST_DOC_STRINGS:  # 2007 May 25
             (first, last, is_first_blank, is_last_blank) = strip_blank_lines(text)
             lines = [line for (scol, line) in text[first: last]]
             lines = leftjust_lines(lines)
@@ -1309,7 +1311,7 @@ class Comments(dict):
                 text.insert(ZERO, [NA, NULL])
             if is_last_blank:
                 text.append([NA, NULL])
-        if text and WRAP_COMMENTS:  # 2007 May 25
+        if text and WRAP_DOC_STRINGS:  # 2007 May 25
             (first, last, is_first_blank, is_last_blank) = strip_blank_lines(text)
             text = text[first: last]
             if text:
@@ -1349,7 +1351,7 @@ class Comments(dict):
             OUTPUT.put(OUTPUT.newline)
             return
 
-        text=[]  # 2007 May 25
+        text = []  # 2007 May 25
         while self.prev_lineno <= lineno:
             if self.prev_lineno in self:
                 (scol, token_string) = self[self.prev_lineno]
@@ -1447,8 +1449,8 @@ class NameSpace(list):
         key = name
         for rule in rules:
             name = rule(name)
-        name = self[ZERO].setdefault(name,Name(name))  # 2006 Dec 14
-        self[ZERO].setdefault(key,name)
+        name = self[ZERO].setdefault(name, Name(name))  # 2006 Dec 14
+        self[ZERO].setdefault(key, name)
         name.append(key)
         return name
 
@@ -1929,18 +1931,14 @@ class NodeStr(Node):
 
         doc = self.get_as_repr()  # 2010 Mar 10
         doc = doc.replace('\t', DOC_TAB_REPLACEMENT)  # 2007 May 24
-        indent = self.indent
-        if NORMALIZE_DOC_STRINGS:
-            doc = '""" %s """' % doc.strip("'\"").strip()
-            indent += 1
         if LEFTJUST_DOC_STRINGS:
             lines = leftjust_lines(doc.strip().splitlines())  # 2007 May 25
             lines.extend([NULL, NULL])
-            margin = '%s%s' % (OUTPUT.newline, INDENTATION * indent)  # 2006 Dec 05
+            margin = '%s%s' % (OUTPUT.newline, INDENTATION * self.indent)  # 2006 Dec 05
             doc = margin.join(lines)
         if WRAP_DOC_STRINGS:  # 2007 May 25
-            margin = '%s%s' % (OUTPUT.newline, INDENTATION * indent)  # 2006 Dec 05
-            line_length = COL_LIMIT - (len(INDENTATION) * indent)
+            margin = '%s%s' % (OUTPUT.newline, INDENTATION * self.indent)  # 2006 Dec 05
+            line_length = COL_LIMIT - (len(INDENTATION) * self.indent)
             line_length = max(line_length, 20)
             lines = wrap_lines(doc.strip().splitlines(), width=line_length)
             lines.extend([NULL, NULL])
@@ -1949,8 +1947,7 @@ class NodeStr(Node):
         doc = fix_newlines(doc)  # 2010 Mar 10
         self.put_multi_line(doc)
         self.line_term()
-        if ADD_BLANK_LINE_AFTER_DOC_STRING:
-            OUTPUT.put_blank_line(5)
+        OUTPUT.put_blank_line(5)
         return self
 
     def put_lit(self, can_split=False):
@@ -2149,7 +2146,7 @@ class NodeAsgList(Node):
         return self
 
     def get_hi_lineno(self):
-        return node[-1].get_hi_lineno()
+        return self.nodes[-1].get_hi_lineno()  # 2012 May 23
 
 
 class NodeAsgName(Node):
@@ -4815,8 +4812,7 @@ def tidy_up(file_in=sys.stdin, file_out=sys.stdout):  # 2007 Jan 22
     OUTPUT.close()
     return
 
-
-def main():                 # 2007 Jan 22
+if __name__ == "__main__":  # 2007 Jan 22
     if DEBUG:
         print 'Begin doctests.'
         doctest.testmod()
@@ -4834,9 +4830,5 @@ def main():                 # 2007 Jan 22
     if file_out in ['-']:
         file_out = sys.stdout
     tidy_up(file_in, file_out)
-
-
-if __name__ == "__main__":
-    main()
 
 # Fin
